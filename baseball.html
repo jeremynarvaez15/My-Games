@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fastball Typing — Baseball Typing Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --grass:    #2d6a2d;
+    --grass2:   #245c24;
+    --dirt:     #c8864a;
+    --dirt2:    #a8693a;
+    --sky:      #4ab3f4;
+    --sky2:     #1a7fd4;
+    --white:    #f5f0e8;
+    --red:      #cc2200;
+    --navy:     #0a1628;
+    --gold:     #f5c518;
+    --cream:    #f5f0e8;
+    --leather:  #b5651d;
+  }
+
+  body {
+    background: var(--sky);
+    color: var(--navy);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+    height: 100vh; width: 100vw;
+    user-select: none;
+  }
+
+  /* ── Sky gradient ── */
+  #bg {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg, #87ceeb 0%, #b8e4f9 40%, #d4f1c4 60%, #2d6a2d 60%, #2d6a2d 100%);
+    z-index: 0;
+  }
+
+  /* ── Baseball diamond ── */
+  #diamond-wrap {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+    width: 280px;
+    height: 140px;
+    pointer-events: none;
+  }
+  #diamond-svg { width: 100%; height: 100%; }
+
+  /* ── Clouds ── */
+  .cloud {
+    position: fixed;
+    background: white;
+    border-radius: 50px;
+    opacity: 0.85;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .cloud::before, .cloud::after {
+    content: '';
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+  }
+
+  /* ── Canvas (particles) ── */
+  #canvas { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+  /* ── Game area ── */
+  #game-area { position: fixed; inset: 0; overflow: hidden; z-index: 5; }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 20px;
+    background: var(--navy);
+    border-bottom: 4px solid var(--red);
+    z-index: 20;
+    flex-wrap: wrap;
+  }
+
+  .hud-block { display: flex; flex-direction: column; align-items: center; min-width: 65px; }
+  .hud-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px; letter-spacing: 2px;
+    color: rgba(245,240,232,0.6);
+  }
+  .hud-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px; color: var(--cream);
+    line-height: 1;
+  }
+  #score-display { font-size: 28px; color: var(--gold); }
+  #combo-display { color: #ff6644; }
+  #combo-display.hot { animation: comboBounce 0.25s ease; }
+
+  /* Strikes (lives) */
+  #strikes-display { letter-spacing: 3px; font-size: 18px; }
+  .strike-on  { color: var(--red); }
+  .strike-off { color: rgba(245,240,232,0.25); }
+
+  /* Inning/XP */
+  #xp-bar-wrap {
+    flex: 1; min-width: 100px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px; height: 8px;
+    margin-top: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  #xp-bar {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--red), var(--gold));
+    transition: width 0.4s ease;
+  }
+  #inning-label { color: var(--gold); }
+
+  /* ── Pitches (falling words) ── */
+  .word {
+    position: absolute;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 19px;
+    letter-spacing: 2px;
+    padding: 5px 12px;
+    border-radius: 50px;
+    border: 2px solid rgba(245,240,232,0.6);
+    background: rgba(245,240,232,0.92);
+    color: var(--navy);
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(0,0,0,0.08);
+    will-change: transform;
+  }
+  /* Baseball stitch lines */
+  .word::before {
+    content: '';
+    position: absolute; top: 50%; left: 4px;
+    width: 6px; height: 10px;
+    border: 1.5px solid var(--red);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+  }
+  .word::after {
+    content: '';
+    position: absolute; top: 50%; right: 4px;
+    width: 6px; height: 10px;
+    border: 1.5px solid var(--red);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+  }
+  .word.targeted {
+    border-color: var(--gold);
+    box-shadow: 0 2px 12px rgba(245,197,24,0.5);
+  }
+  .word.danger {
+    border-color: var(--red);
+    animation: wobble 0.35s ease infinite alternate;
+    background: rgba(255,240,235,0.96);
+  }
+  .word .typed { color: var(--red); font-weight: bold; }
+  .word .remaining { color: var(--navy); }
+
+  /* Power-up pitch */
+  .word.powerup {
+    background: var(--gold);
+    border-color: var(--red);
+    color: var(--navy);
+    font-weight: bold;
+    box-shadow: 0 2px 16px rgba(245,197,24,0.7);
+    animation: pulsePitch 0.8s ease infinite;
+  }
+  .word.powerup::before, .word.powerup::after { opacity: 0; }
+
+  /* ── Input area ── */
+  #input-wrap {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center;
+    padding: 10px 20px;
+    background: var(--navy);
+    border-top: 4px solid var(--red);
+    z-index: 20;
+    gap: 12px;
+  }
+
+  /* Batter indicator */
+  #batter-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 0 4px rgba(245,197,24,0.5));
+    flex-shrink: 0;
+  }
+
+  #type-input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(245,240,232,0.3);
+    border-radius: 6px;
+    color: var(--cream);
+    font-family: 'Share Tech Neue', monospace;
+    font-size: 20px;
+    padding: 7px 14px;
+    outline: none;
+    caret-color: var(--gold);
+    transition: border-color 0.15s;
+  }
+  #type-input:focus { border-color: var(--gold); }
+  #type-input.error {
+    border-color: var(--red);
+    animation: shake 0.25s ease;
+  }
+
+  #wpm-badge { font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: #88ff88; white-space: nowrap; }
+  #acc-badge  { font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: #aaa; white-space: nowrap; }
+
+  /* ── Screens ── */
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 30;
+    background: linear-gradient(160deg, var(--navy) 0%, #0d2040 100%);
+  }
+  .screen.hidden { display: none; }
+
+  .screen-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(48px, 10vw, 88px);
+    color: var(--cream);
+    text-align: center;
+    line-height: 1;
+    margin-bottom: 4px;
+    text-shadow: 3px 3px 0 var(--red);
+  }
+  .subtitle-league {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px; letter-spacing: 6px;
+    color: var(--gold);
+    margin-bottom: 32px;
+  }
+  .stadium-art {
+    font-size: 64px; margin-bottom: 16px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+  }
+
+  .btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px; letter-spacing: 3px;
+    padding: 12px 36px;
+    border: 3px solid var(--red);
+    border-radius: 6px;
+    background: var(--red);
+    color: var(--cream);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 6px;
+  }
+  .btn:hover { background: #ee3311; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(204,34,0,0.4); }
+  .btn.gold { border-color: var(--gold); background: var(--gold); color: var(--navy); }
+  .btn.gold:hover { background: #e5b508; box-shadow: 0 4px 16px rgba(245,197,24,0.4); }
+  .btn.outline { background: transparent; color: var(--cream); border-color: rgba(245,240,232,0.4); }
+  .btn.outline:hover { background: rgba(255,255,255,0.08); }
+
+  .instructions {
+    max-width: 460px; text-align: center;
+    color: rgba(245,240,232,0.65);
+    font-size: 13px; line-height: 1.7;
+    margin-bottom: 20px;
+  }
+  .instructions strong { color: var(--cream); }
+  .instructions .power { color: var(--gold); }
+
+  .difficulty-btns { display: flex; gap: 8px; margin-bottom: 16px; }
+  .diff-btn {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px; letter-spacing: 2px;
+    padding: 8px 18px; border-radius: 4px;
+    border: 2px solid rgba(245,240,232,0.2);
+    background: rgba(255,255,255,0.05);
+    color: rgba(245,240,232,0.5);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .diff-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(245,197,24,0.12); }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; min-width: 300px; }
+  .stat-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(245,240,232,0.15);
+    border-radius: 8px; padding: 14px; text-align: center;
+  }
+  .stat-card .val { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--cream); }
+  .stat-card .lbl { font-size: 10px; color: rgba(245,240,232,0.45); letter-spacing: 2px; text-transform: uppercase; }
+  .stat-card.gold-card .val { color: var(--gold); }
+  .stat-card.red-card  .val { color: #ff6644; }
+  .stat-card.green-card .val { color: #88ff88; }
+
+  .hs-note { font-family: 'Bebas Neue',sans-serif; font-size: 13px; color: rgba(245,240,232,0.35); letter-spacing: 2px; margin-top: 12px; }
+  #new-hs-msg { color: var(--gold); font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:3px; margin-bottom:8px; display:none; }
+
+  /* Power-up banner */
+  #powerup-indicator {
+    position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+    font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 3px;
+    padding: 5px 20px; border-radius: 4px;
+    border: 2px solid var(--gold); color: var(--navy);
+    background: var(--gold); z-index: 25;
+    transition: opacity 0.5s; pointer-events: none; display: none;
+  }
+
+  /* Level up banner */
+  #level-banner {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%,-50%) scale(0);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px; color: var(--gold);
+    text-shadow: 3px 3px 0 var(--red);
+    z-index: 25; pointer-events: none; opacity: 0; white-space: nowrap;
+  }
+
+  /* Flash */
+  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 15; opacity: 0; transition: opacity 0.08s; }
+
+  /* Shield / freeze badges */
+  #shield-badge { display:none; position:fixed; bottom:80px; right:20px; font-size:26px; z-index:25; animation: float 2s ease-in-out infinite; }
+  #freeze-badge { display:none; position:fixed; bottom:80px; right:56px; font-size:26px; z-index:25; animation: float 2s ease-in-out infinite 0.5s; }
+
+  /* Pause */
+  #pause-overlay {
+    position: fixed; inset: 0; background: rgba(10,22,40,0.88);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; z-index: 28;
+  }
+  #pause-overlay .screen-title { font-size: 56px; }
+
+  /* Debug */
+  #dbg { position:fixed; bottom:130px; right:10px; background:rgba(0,0,0,0.8); color:lime; font-family:monospace; font-size:11px; padding:6px; border-radius:4px; z-index:99; pointer-events:none; display:none; }
+
+  /* ── Animations ── */
+  @keyframes wobble { from { transform: translateX(-3px) rotate(-1deg); } to { transform: translateX(3px) rotate(1deg); } }
+  @keyframes shake  { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  @keyframes comboBounce { 0%{transform:scale(1)} 50%{transform:scale(1.45)} 100%{transform:scale(1)} }
+  @keyframes pulsePitch  { 0%,100%{box-shadow:0 2px 16px rgba(245,197,24,0.5)} 50%{box-shadow:0 2px 28px rgba(245,197,24,0.9),0 0 40px rgba(245,197,24,0.3)} }
+  @keyframes float       { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+  @keyframes levelUp     { 0%{transform:translate(-50%,-50%) scale(0);opacity:0} 20%{transform:translate(-50%,-50%) scale(1.15);opacity:1} 70%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-50%) scale(0.8);opacity:0} }
+  @keyframes fadeInUp    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+
+<!-- Clouds -->
+<div class="cloud" style="width:120px;height:40px;top:8%;left:10%"><div style="position:absolute;width:70px;height:60px;border-radius:50%;background:white;top:-30px;left:20px"></div><div style="position:absolute;width:50px;height:50px;border-radius:50%;background:white;top:-20px;left:50px"></div></div>
+<div class="cloud" style="width:90px;height:32px;top:12%;right:15%"><div style="position:absolute;width:55px;height:50px;border-radius:50%;background:white;top:-25px;left:15px"></div></div>
+
+<!-- Baseball diamond -->
+<div id="diamond-wrap">
+  <svg id="diamond-svg" viewBox="0 0 280 140" xmlns="http://www.w3.org/2000/svg">
+    <!-- Outfield arc -->
+    <path d="M 10 130 Q 140 20 270 130" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+    <!-- Infield dirt -->
+    <polygon points="140,20 200,80 140,110 80,80" fill="#c8864a" opacity="0.7"/>
+    <!-- Base lines -->
+    <line x1="140" y1="20" x2="200" y2="80" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="200" y1="80" x2="140" y2="110" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="140" y1="110" x2="80" y2="80" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <line x1="80" y1="80" x2="140" y2="20" stroke="white" stroke-width="1.5" opacity="0.6"/>
+    <!-- Bases -->
+    <rect x="134" y="14" width="12" height="12" rx="2" fill="white" opacity="0.9"/>
+    <rect x="194" y="74" width="12" height="12" rx="2" fill="white" opacity="0.9"/>
+    <rect x="134" y="104" width="12" height="12" rx="2" fill="white" opacity="0.9"/>
+    <rect x="74" y="74" width="12" height="12" rx="2" fill="white" opacity="0.9"/>
+    <!-- Pitcher's mound -->
+    <circle cx="140" cy="65" r="5" fill="#c8864a" stroke="white" stroke-width="1" opacity="0.8"/>
+  </svg>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<!-- Screens -->
+<div id="start-screen" class="screen">
+  <div class="stadium-art">⚾</div>
+  <div class="screen-title">FASTBALL</div>
+  <div class="screen-title" style="font-size:clamp(28px,5vw,48px);text-shadow:none;color:var(--gold);margin-top:-8px;">TYPING TRAINER</div>
+  <div class="subtitle-league">MAJOR LEAGUE KEYBOARD</div>
+
+  <div class="instructions">
+    Pitches fly in from the mound. <strong>Type each word</strong> to connect for a hit before it crosses home plate.
+    String together hits for a <strong>batting streak multiplier</strong>. Watch for golden <span class="power">SPECIAL</span> pitches:
+    <span class="power">CURVE</span> slows the action · <span class="power">HOMER</span> clears the bases · <span class="power">MITT</span> blocks one strike.
+  </div>
+
+  <div class="difficulty-btns">
+    <div class="diff-btn active" data-diff="easy">Rookie</div>
+    <div class="diff-btn" data-diff="normal">Pro</div>
+    <div class="diff-btn" data-diff="hard">All-Star</div>
+  </div>
+
+  <button class="btn gold" id="start-btn">⚾ PLAY BALL!</button>
+  <div class="hs-note" id="hs-note"></div>
+</div>
+
+<div id="gameover-screen" class="screen hidden">
+  <div class="stadium-art" id="go-icon">⚾</div>
+  <div class="screen-title" id="go-title">STRUCK OUT</div>
+  <div class="subtitle-league" id="go-sub">Better luck next game</div>
+  <div class="stats-grid">
+    <div class="stat-card gold-card"><div class="val" id="go-score">0</div><div class="lbl">Runs</div></div>
+    <div class="stat-card"><div class="val" id="go-level">1</div><div class="lbl">Inning</div></div>
+    <div class="stat-card green-card"><div class="val" id="go-wpm">0</div><div class="lbl">Best WPM</div></div>
+    <div class="stat-card"><div class="val" id="go-acc">0%</div><div class="lbl">Batting Avg</div></div>
+  </div>
+  <div id="new-hs-msg">★ NEW RECORD ★</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn gold" id="retry-btn">↺ PLAY AGAIN</button>
+    <button class="btn outline" id="menu-btn">⌂ DUGOUT</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-block">
+    <div class="hud-label">Runs</div>
+    <div class="hud-val" id="score-display">0</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-label">Streak</div>
+    <div class="hud-val" id="combo-display">×1</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-label">Strikes</div>
+    <div class="hud-val" id="strikes-display">
+      <span class="strike-off">●</span><span class="strike-off">●</span><span class="strike-off">●</span>
+    </div>
+  </div>
+  <div class="hud-block" style="flex:1;min-width:120px">
+    <div class="hud-label">Inning <span id="inning-label" style="color:var(--gold)">1</span></div>
+    <div id="xp-bar-wrap"><div id="xp-bar" style="width:0%"></div></div>
+  </div>
+</div>
+
+<div id="game-area"></div>
+
+<div id="input-wrap">
+  <div id="batter-icon">🏏</div>
+  <input type="text" id="type-input" autocomplete="off" autocorrect="off"
+         autocapitalize="off" spellcheck="false" placeholder="swing away…" disabled>
+  <div id="wpm-badge">0 WPM</div>
+  <div id="acc-badge">AVG: —</div>
+</div>
+
+<div id="powerup-indicator"></div>
+<div id="flash"></div>
+<div id="level-banner">NEXT INNING!</div>
+<div id="shield-badge">🧤</div>
+<div id="freeze-badge">🌀</div>
+<div id="dbg"></div>
+
+<div id="pause-overlay">
+  <div class="screen-title">TIME OUT</div>
+  <button class="btn" id="resume-btn">▶ RESUME</button>
+</div>
+
+<script>
+'use strict';
+
+// ── Word pools ───────────────────────────────────────────────────────────────
+const WORDS = {
+  easy: [
+    'bat','hit','run','out','fly','tag','bunt','ball','base','safe',
+    'foul','wild','play','home','line','fair','walk','save','steal','balk',
+    'pop','gap','win','box','cap','cup','glove','mitt','park','mound',
+  ],
+  medium: [
+    'single','double','triple','inning','umpire','slider','batter','catcher',
+    'dugout','lineup','fielder','outfield','pitcher','diamond','bullpen',
+    'squeeze','fastball','stolen','runner','closer','switch','pinch',
+    'manager','leadoff','cleanup','strikeout','pickoff','grounder',
+  ],
+  hard: [
+    'curveball','shortstop','sacrifice','changeup','baseball','outfielder',
+    'backstop','lefthander','centerfield','walkoff','hitandrun','interference',
+    'intentional','ballpark','designated','scoreboard','grandslam','defensive',
+    'offseason','pitching','battingavg','doubleplay','tripleplay','overtime',
+  ],
+  expert: [
+    'extrainnings','battingorder','sabermetrics','intentionalwalk',
+    'groundruleDouble','doubleheader','pinchrunner','lefthanded',
+    'firstbaseman','thirdbaseman','rightfielder','leftfielder',
+    'winningstreak','sluggingpct','onbasepercentage','fieldingpct',
+  ],
+};
+
+const POWERUPS = ['CURVE','HOMER','MITT'];
+
+// ── Audio ────────────────────────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let ctx = null;
+function ensureAudio() { if (!ctx) ctx = new AudioCtx(); }
+function playTone(freq, type, dur, vol=0.15, ramp) {
+  if (!ctx) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  o.type = type; o.frequency.setValueAtTime(freq, ctx.currentTime);
+  g.gain.setValueAtTime(vol, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  o.start(); o.stop(ctx.currentTime + dur);
+}
+
+const SFX = {
+  type()  { ensureAudio(); playTone(500+Math.random()*150,'sine',0.04,0.04); },
+  crack(combo) {
+    ensureAudio();
+    // bat crack: short noise burst then pitch drop
+    playTone(280,'sawtooth',0.06,0.3);
+    playTone(180+combo*15,'sine',0.2,0.2);
+    setTimeout(()=>playTone(120,'sine',0.15,0.1),60);
+  },
+  strike() {
+    ensureAudio();
+    playTone(150,'sawtooth',0.25,0.2);
+    playTone(100,'sine',0.3,0.15);
+  },
+  levelUp() {
+    ensureAudio();
+    [330,392,494,587].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.3,0.18),i*80));
+  },
+  powerup() {
+    ensureAudio();
+    [660,880,1100].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.18,0.15),i*55));
+  },
+  gameover() {
+    ensureAudio();
+    [280,200,140,100].forEach((f,i)=>setTimeout(()=>playTone(f,'sawtooth',0.4,0.18),i*110));
+  },
+};
+
+// ── Particles ─────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const pctx = canvas.getContext('2d');
+let particles = [];
+function resizeCanvas() { canvas.width=innerWidth; canvas.height=innerHeight; }
+resizeCanvas(); window.addEventListener('resize',resizeCanvas);
+
+const HIT_COLORS = ['#f5c518','#ff6644','#ffffff','#88ff88','#ffaaaa'];
+
+function spawnBatCrack(x, y, combo) {
+  const color = HIT_COLORS[Math.min(combo-1, HIT_COLORS.length-1)];
+  // Baseball flying out
+  for (let i=0;i<10+combo*2;i++) {
+    const angle = -Math.PI*0.6 + (Math.random()-0.5)*Math.PI*0.8;
+    const speed = 3+Math.random()*5+Math.min(combo,8)*0.3;
+    particles.push({
+      x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-2,
+      life:1,decay:0.02+Math.random()*0.015,size:3+Math.random()*4,color,spin:0
+    });
+  }
+  // Stars
+  for (let i=0;i<6;i++) {
+    const angle = Math.random()*Math.PI*2;
+    particles.push({
+      x,y,vx:Math.cos(angle)*2,vy:Math.sin(angle)*2,
+      life:1,decay:0.04,size:2,color:'#ffffff',star:true
+    });
+  }
+}
+
+function updateParticles() {
+  pctx.clearRect(0,0,canvas.width,canvas.height);
+  particles = particles.filter(p=>p.life>0);
+  for (const p of particles) {
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.15; p.life-=p.decay; p.vx*=0.97;
+    pctx.globalAlpha=Math.max(0,p.life);
+    pctx.fillStyle=p.color;
+    if (p.star) {
+      pctx.beginPath();
+      for (let i=0;i<5;i++) {
+        const a=i*Math.PI*2/5-Math.PI/2;
+        const r=p.size*p.life; const r2=r*0.4;
+        i===0?pctx.moveTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r):pctx.lineTo(p.x+Math.cos(a)*r,p.y+Math.sin(a)*r);
+        const a2=a+Math.PI/5;
+        pctx.lineTo(p.x+Math.cos(a2)*r2,p.y+Math.sin(a2)*r2);
+      }
+      pctx.closePath(); pctx.fill();
+    } else {
+      pctx.beginPath();
+      pctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);
+      pctx.fill();
+    }
+  }
+  pctx.globalAlpha=1;
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const DIFF = {
+  easy:   { speedMult:0.6, wordTiers:['easy','easy','medium'] },
+  normal: { speedMult:1.0, wordTiers:['easy','medium','medium','hard'] },
+  hard:   { speedMult:1.4, wordTiers:['medium','hard','hard','expert'] },
+};
+
+const MAX_STRIKES = 9; // 3 outs × 3 strikes (very forgiving)
+
+const STATE = {
+  running:false, paused:false,
+  score:0, strikes:0, combo:1,
+  inning:1, xp:0, xpNeeded:10,
+  totalTyped:0, totalCorrect:0,
+  wpm:0, wordsTyped:[],
+  difficulty:'normal',
+  frozen:false, shielded:false,
+  freezeTimer:null,
+  words:[],
+  lastSpawnTime:0,
+  lastFrame:0,
+  hsScore:0, hsWpm:0,
+};
+
+function getLevelConfig(inning) {
+  const mult = DIFF[STATE.difficulty].speedMult;
+  const speed    = (55 + inning * 8) * mult;
+  const interval = Math.max(700, 2200 - inning * 80);
+  const maxWords = Math.min(1 + Math.floor(inning / 3), 5);
+  return { speed, interval, maxWords };
+}
+
+function getWordForInning(inning) {
+  const tiers = DIFF[STATE.difficulty].wordTiers;
+  const idx   = Math.min(Math.floor((inning-1)/3), tiers.length-1);
+  const pool  = WORDS[tiers[idx]];
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const gameArea     = document.getElementById('game-area');
+const typeInput    = document.getElementById('type-input');
+const scoreEl      = document.getElementById('score-display');
+const comboEl      = document.getElementById('combo-display');
+const strikesEl    = document.getElementById('strikes-display');
+const inningEl     = document.getElementById('inning-label');
+const xpBarEl      = document.getElementById('xp-bar');
+const wpmEl        = document.getElementById('wpm-badge');
+const accEl        = document.getElementById('acc-badge');
+const flashEl      = document.getElementById('flash');
+const levelBanner  = document.getElementById('level-banner');
+const powerupInd   = document.getElementById('powerup-indicator');
+const shieldBadge  = document.getElementById('shield-badge');
+const freezeBadge  = document.getElementById('freeze-badge');
+
+// ── localStorage ──────────────────────────────────────────────────────────────
+function loadHS() {
+  STATE.hsScore = parseInt(localStorage.getItem('fb_hs_score')||'0');
+  STATE.hsWpm   = parseInt(localStorage.getItem('fb_hs_wpm')  ||'0');
+}
+function saveHS() {
+  if (STATE.score>STATE.hsScore) localStorage.setItem('fb_hs_score',STATE.score);
+  if (STATE.wpm  >STATE.hsWpm)   localStorage.setItem('fb_hs_wpm',  STATE.wpm);
+}
+
+// ── Word management ───────────────────────────────────────────────────────────
+function createWordEl(text, x, isPowerup) {
+  const el = document.createElement('div');
+  el.className = 'word' + (isPowerup ? ' powerup' : '');
+  el.style.left = x + 'px';
+  el.style.top  = '-50px';
+  if (isPowerup) {
+    el.textContent = text;
+  } else {
+    el.innerHTML = `<span class="typed"></span><span class="remaining">${text}</span>`;
+  }
+  gameArea.appendChild(el);
+  return el;
+}
+
+function spawnWord() {
+  if (!STATE.running || STATE.paused) return;
+  const cfg = getLevelConfig(STATE.inning);
+  if (STATE.words.length >= cfg.maxWords) return;
+
+  const isPowerup = Math.random() < 0.07 && STATE.inning >= 2;
+  let text;
+  if (isPowerup) {
+    text = POWERUPS[Math.floor(Math.random()*POWERUPS.length)];
+  } else {
+    const active = new Set(STATE.words.map(w=>w.text));
+    let c;
+    for (let t=0;t<10;t++) { c=getWordForInning(STATE.inning); if(!active.has(c))break; }
+    text = c;
+  }
+
+  const margin = 80;
+  const x = margin + Math.random()*(innerWidth - margin*2 - 180);
+  const el = createWordEl(text, x, isPowerup);
+
+  STATE.words.push({
+    text, el,
+    y: -50,
+    speed: getLevelConfig(STATE.inning).speed * (0.9 + Math.random()*0.2),
+    isPowerup,
+    typedCount: 0,
+  });
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+let targetWord = null;
+
+typeInput.addEventListener('input', handleInput);
+typeInput.addEventListener('keydown', e => { if (e.key==='Escape') togglePause(); });
+document.addEventListener('keydown', e => {
+  if (STATE.running && !STATE.paused && e.key!=='Escape' && document.activeElement!==typeInput) typeInput.focus();
+});
+
+function handleInput() {
+  if (!STATE.running || STATE.paused) return;
+  const val = typeInput.value.toLowerCase().trim();
+  STATE.totalTyped++;
+  SFX.type();
+
+  // Powerup check
+  if (!targetWord) {
+    for (const w of STATE.words) {
+      if (w.isPowerup && val===w.text.toLowerCase()) {
+        activatePowerup(w.text); removeWord(w,true);
+        typeInput.value=''; targetWord=null; return;
+      }
+    }
+  }
+
+  // Find / keep target
+  if (!targetWord) {
+    for (const w of STATE.words) {
+      if (!w.isPowerup && w.text.toLowerCase().startsWith(val)) {
+        targetWord=w; w.el.classList.add('targeted'); break;
+      }
+    }
+  } else {
+    if (!targetWord.text.toLowerCase().startsWith(val)) {
+      targetWord.el.classList.remove('targeted');
+      targetWord.typedCount=0; updateWordDisplay(targetWord); targetWord=null;
+      for (const w of STATE.words) {
+        if (!w.isPowerup && w.text.toLowerCase().startsWith(val)) {
+          targetWord=w; w.el.classList.add('targeted'); break;
+        }
+      }
+      if (!targetWord) {
+        typeInput.classList.add('error');
+        setTimeout(()=>typeInput.classList.remove('error'),250); return;
+      }
+    }
+  }
+
+  if (!targetWord) {
+    typeInput.classList.add('error');
+    setTimeout(()=>typeInput.classList.remove('error'),250); return;
+  }
+
+  targetWord.typedCount = val.length;
+  updateWordDisplay(targetWord);
+
+  if (val === targetWord.text.toLowerCase()) {
+    STATE.totalCorrect++;
+    const w = targetWord; targetWord=null; typeInput.value='';
+    hitWord(w);
+  }
+}
+
+function updateWordDisplay(w) {
+  if (w.isPowerup) return;
+  w.el.innerHTML = `<span class="typed">${w.text.slice(0,w.typedCount)}</span><span class="remaining">${w.text.slice(w.typedCount)}</span>`;
+}
+
+function hitWord(w) {
+  const rect = w.el.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top  + rect.height/2;
+  spawnBatCrack(cx, cy, STATE.combo);
+  SFX.crack(STATE.combo);
+
+  const pts = w.text.length * 10 * STATE.combo;
+  STATE.score += pts;
+  addXP(w.text.length);
+  STATE.combo = Math.min(STATE.combo+1, 10);
+  comboEl.classList.remove('hot'); void comboEl.offsetWidth; comboEl.classList.add('hot');
+  showFloatingScore(cx, cy, pts, STATE.combo);
+  removeWord(w, false);
+  STATE.wordsTyped.push(Date.now());
+  updateWPM(); updateHUD();
+}
+
+function showFloatingScore(x, y, pts, combo) {
+  const el = document.createElement('div');
+  const labels = ['','','','HIT!','EXTRA BASE!','RBI!','HOME RUN!','GRAND SLAM!'];
+  const label = combo >= 4 ? (labels[Math.min(combo,7)] || 'HOMER!!') : '+'+pts;
+  el.style.cssText=`position:fixed;left:${x}px;top:${y}px;font-family:'Bebas Neue',sans-serif;font-size:${18+Math.min(combo,6)*3}px;color:${combo>=4?'#f5c518':'#f5c518'};pointer-events:none;z-index:12;transform:translateX(-50%);white-space:nowrap;text-shadow:1px 1px 0 #cc2200;`;
+  el.textContent = label;
+  document.body.appendChild(el);
+  let vy=-2.5, op=1, yp=y;
+  const tick=()=>{ yp+=vy; op-=0.022; el.style.top=yp+'px'; el.style.opacity=op; if(op>0)requestAnimationFrame(tick); else el.remove(); };
+  requestAnimationFrame(tick);
+}
+
+function removeWord(w, silent) {
+  w.el.remove();
+  STATE.words = STATE.words.filter(x=>x!==w);
+  if (targetWord===w) { targetWord=null; typeInput.value=''; }
+  STATE.lastSpawnTime = 0;
+}
+
+function pitchMissed(w) {
+  if (STATE.shielded) {
+    STATE.shielded=false; shieldBadge.style.display='none';
+    removeWord(w,true); flashScreen('#f5c518',0.25); return;
+  }
+  STATE.strikes++;
+  STATE.combo=1;
+  SFX.strike();
+  flashScreen('#cc2200',0.45);
+  removeWord(w,true); typeInput.value=''; targetWord=null;
+  updateHUD();
+  if (STATE.strikes>=MAX_STRIKES) endGame();
+}
+
+function addXP(amt) {
+  STATE.xp += amt;
+  while (STATE.xp >= STATE.xpNeeded) {
+    STATE.xp -= STATE.xpNeeded;
+    STATE.inning++;
+    STATE.xpNeeded = Math.floor(STATE.xpNeeded*1.3);
+    showInningChange();
+  }
+}
+
+function showInningChange() {
+  SFX.levelUp();
+  flashScreen('#f5c518',0.25);
+  levelBanner.style.animation='none'; void levelBanner.offsetWidth;
+  levelBanner.textContent=`INNING ${STATE.inning}!`;
+  levelBanner.style.animation='levelUp 1.2s ease forwards';
+}
+
+// ── Power-ups ─────────────────────────────────────────────────────────────────
+function activatePowerup(name) {
+  SFX.powerup(); flashScreen('#f5c518',0.2);
+  powerupInd.textContent = name==='CURVE'?'🌀 CURVEBALL — SLOW MOTION':name==='HOMER'?'⚾ HOME RUN — BASES CLEARED':'🧤 MITT — NEXT STRIKE BLOCKED';
+  powerupInd.style.display='block'; powerupInd.style.opacity='1';
+  clearTimeout(powerupInd._t); powerupInd._t=setTimeout(()=>{ powerupInd.style.opacity='0'; setTimeout(()=>powerupInd.style.display='none',500); },2000);
+
+  if (name==='CURVE') {
+    STATE.frozen=true; freezeBadge.style.display='block';
+    clearTimeout(STATE.freezeTimer);
+    STATE.freezeTimer=setTimeout(()=>{ STATE.frozen=false; freezeBadge.style.display='none'; },5000);
+  } else if (name==='HOMER') {
+    [...STATE.words].forEach(w=>{ const r=w.el.getBoundingClientRect(); spawnBatCrack(r.left+r.width/2,r.top+r.height/2,STATE.combo); w.el.remove(); });
+    STATE.words=[]; targetWord=null; typeInput.value='';
+    STATE.score+=100; STATE.lastSpawnTime=0;
+  } else if (name==='MITT') {
+    STATE.shielded=true; shieldBadge.style.display='block';
+  }
+  updateHUD();
+}
+
+// ── WPM ───────────────────────────────────────────────────────────────────────
+function updateWPM() {
+  const now=Date.now();
+  STATE.wordsTyped=STATE.wordsTyped.filter(t=>now-t<10000);
+  STATE.wpm=Math.round(STATE.wordsTyped.length*6);
+}
+
+// ── HUD ───────────────────────────────────────────────────────────────────────
+function updateHUD() {
+  scoreEl.textContent = STATE.score.toLocaleString();
+  comboEl.textContent = '×'+STATE.combo;
+  inningEl.textContent = STATE.inning;
+  xpBarEl.style.width = Math.round((STATE.xp/STATE.xpNeeded)*100)+'%';
+  wpmEl.textContent = STATE.wpm+' WPM';
+
+  // Strikes display: filled = taken, empty = remaining
+  const dots = Array.from({length:MAX_STRIKES},(_,i)=>`<span class="${i<STATE.strikes?'strike-on':'strike-off'}">●</span>`).join('');
+  strikesEl.innerHTML = dots;
+
+  const acc = STATE.totalTyped>0 ? Math.round((STATE.totalCorrect/STATE.totalTyped)*100) : 0;
+  accEl.textContent = 'AVG: '+acc+'%';
+}
+
+// ── Flash ─────────────────────────────────────────────────────────────────────
+function flashScreen(color, alpha) {
+  flashEl.style.background=color; flashEl.style.opacity=alpha;
+  setTimeout(()=>flashEl.style.opacity=0,120);
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+function gameLoop(ts) {
+  if (!STATE.running) return;
+  try {
+    if (!STATE.paused) {
+      const dt = Math.min((ts-STATE.lastFrame)/1000,0.1);
+      STATE.lastFrame = ts;
+
+      const bottomY = innerHeight-80;
+      const dangerY = bottomY-90;
+
+      for (const w of [...STATE.words]) {
+        if (!STATE.frozen) w.y += w.speed*dt;
+        w.el.style.top = w.y+'px';
+        w.el.classList.toggle('danger', w.y>dangerY);
+        if (w.y>bottomY) pitchMissed(w);
+      }
+
+      // Spawn pitches
+      const now = Date.now();
+      const cfg = getLevelConfig(STATE.inning);
+      const delay = STATE.words.length===0 ? 800 : cfg.interval;
+      if (STATE.words.length<cfg.maxWords && now-STATE.lastSpawnTime>=delay) {
+        STATE.lastSpawnTime=now; spawnWord();
+      }
+
+      updateWPM(); updateHUD(); updateParticles();
+    }
+  } catch(e) {
+    const d=document.getElementById('dbg');
+    if(d){d.style.display='block';d.textContent='ERR:'+e.message;}
+    console.error(e);
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
+function startGame() {
+  ensureAudio(); loadHS();
+  Object.assign(STATE,{
+    running:true, paused:false,
+    score:0, strikes:0, combo:1,
+    inning:1, xp:0, xpNeeded:10,
+    totalTyped:0, totalCorrect:0,
+    wpm:0, wordsTyped:[],
+    frozen:false, shielded:false,
+    words:[], lastSpawnTime:0,
+  });
+  clearTimeout(STATE.freezeTimer);
+  freezeBadge.style.display='none'; shieldBadge.style.display='none';
+  particles=[]; targetWord=null; typeInput.value='';
+  gameArea.querySelectorAll('.word').forEach(e=>e.remove());
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.add('hidden');
+  typeInput.disabled=false; typeInput.focus();
+  updateHUD();
+  STATE.lastFrame=performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  STATE.running=false; typeInput.disabled=true;
+  SFX.gameover();
+  const newHS = STATE.score>STATE.hsScore;
+  saveHS(); loadHS();
+  const acc = STATE.totalTyped>0?Math.round((STATE.totalCorrect/STATE.totalTyped)*100):0;
+  document.getElementById('go-score').textContent = STATE.score.toLocaleString();
+  document.getElementById('go-level').textContent  = STATE.inning;
+  document.getElementById('go-wpm').textContent    = STATE.wpm;
+  document.getElementById('go-acc').textContent    = acc+'%';
+  document.getElementById('new-hs-msg').style.display = newHS?'block':'none';
+  const msgs=['Shook up in the box...','Hung one and paid for it.','Couldn\'t catch up to the heat.','Three up, three down.','Tough day at the plate.'];
+  document.getElementById('go-sub').textContent = newHS?'New record — call the Hall!':msgs[Math.floor(Math.random()*msgs.length)];
+  document.getElementById('go-icon').textContent = newHS?'🏆':'⚾';
+  document.getElementById('go-title').textContent = STATE.strikes>=MAX_STRIKES?'STRUCK OUT':'GREAT GAME';
+  setTimeout(()=>document.getElementById('gameover-screen').classList.remove('hidden'),400);
+}
+
+function togglePause() {
+  if (!STATE.running) return;
+  STATE.paused=!STATE.paused;
+  document.getElementById('pause-overlay').style.display=STATE.paused?'flex':'none';
+  if (!STATE.paused) { STATE.lastFrame=performance.now(); typeInput.focus(); }
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('retry-btn').addEventListener('click', startGame);
+document.getElementById('resume-btn').addEventListener('click', togglePause);
+document.getElementById('menu-btn').addEventListener('click', ()=>{
+  STATE.running=false;
+  gameArea.querySelectorAll('.word').forEach(e=>e.remove());
+  document.getElementById('gameover-screen').classList.add('hidden');
+  document.getElementById('start-screen').classList.remove('hidden');
+  updateHsNote();
+});
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); STATE.difficulty=btn.dataset.diff;
+  });
+});
+
+function updateHsNote() {
+  loadHS();
+  const n=document.getElementById('hs-note');
+  n.textContent = STATE.hsScore>0?`Season best: ${STATE.hsScore.toLocaleString()} runs · Top speed: ${STATE.hsWpm} WPM`:'Step up to the plate — first at-bat!';
+}
+updateHsNote();
+</script>
+</body>
+</html>
